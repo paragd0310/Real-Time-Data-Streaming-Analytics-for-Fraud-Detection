@@ -81,10 +81,33 @@ RapidTransactionFraud AS (
     HAVING COUNT(*) >= 3
 ),
 
+UnusualLocationFraud AS (
+    SELECT 
+        transaction_id,
+        user_id,
+        amount,
+        timestamp,
+        currency,
+        location,
+        device,
+        ip_address,
+        'UnusualLocationFraud' AS fraud_type
+    FROM CleanData
+    WHERE location NOT IN (
+        SELECT TOP 1 location
+        FROM CleanData AS history
+        WHERE history.user_id = CleanData.user_id
+        GROUP BY location
+        ORDER BY COUNT(*) DESC
+    )
+),
+
 CombinedFrauds AS (
     SELECT * FROM HighAmountFraud
     UNION ALL
     SELECT * FROM RapidTransactionFraud
+    UNION ALL
+    SELECT * FROM UnusualLocationFraud
 ),
 
 UniqueTransactions AS (
@@ -100,11 +123,9 @@ UniqueTransactions AS (
     FROM CleanData
 )
 
--- Output to Blob Storage
 SELECT * INTO cleanedoutput FROM CombinedFrauds;
-
--- Output to Cosmos DB
 SELECT * INTO cosmosoutput FROM UniqueTransactions;
+
 ```
 
 ## Testing
